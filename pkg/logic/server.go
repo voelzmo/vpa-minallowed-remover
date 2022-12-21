@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -66,10 +65,7 @@ func (m *MinallowedRemover) Serve(w http.ResponseWriter, r *http.Request) {
 
 	patchedContainerStrings := []string{}
 	for i, containerPolicy := range vpa.Spec.ResourcePolicy.ContainerPolicies {
-		defaultQuantity := &resource.Quantity{
-			Format: resource.DecimalSI,
-		}
-		if containerPolicy.MinAllowed != nil && containerPolicy.MinAllowed.Cpu() != defaultQuantity {
+		if containerPolicy.MinAllowed != nil && containerPolicy.MinAllowed.Cpu().String() != "0" {
 			patches = append(patches, PatchRecord{
 				Op:   "remove",
 				Path: fmt.Sprintf("/spec/resourcePolicy/containerPolicies/%v/minAllowed/cpu", i),
@@ -90,7 +86,7 @@ func (m *MinallowedRemover) Serve(w http.ResponseWriter, r *http.Request) {
 		patchedContainersMessage := strings.Join(patchedContainerStrings, ", ")
 		patches = append(patches, PatchRecord{
 			Op:    "add",
-			Path:  "/metadata/annotations/vpaMinallowedRemover",
+			Path:  "/metadata/annotations/vpaMinAllowedRemover",
 			Value: fmt.Sprintf("removed CPU minAllowed for %s", patchedContainersMessage),
 		})
 	}
