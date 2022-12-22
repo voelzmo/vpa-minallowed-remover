@@ -34,13 +34,13 @@ type Config struct {
 }
 
 type MinallowedRemover struct {
-	deserializer runtime.Decoder
+	Deserializer runtime.Decoder
 }
 
 func NewServerWithoutSSL(listenAddress string) *http.Server {
 	return &http.Server{
 		Addr:      fmt.Sprintf(":%s", listenAddress),
-		Handler:   &MinallowedRemover{deserializer: codecs.UniversalDeserializer()},
+		Handler:   &MinallowedRemover{Deserializer: codecs.UniversalDeserializer()},
 		TLSConfig: nil,
 	}
 }
@@ -83,7 +83,7 @@ func (m *MinallowedRemover) GetAdmissionResponse(request *admissionv1.AdmissionR
 
 	rawObject := request.Object.Raw
 	vpa := &autoscalingv1.VerticalPodAutoscaler{}
-	_, _, err := m.deserializer.Decode(rawObject, nil, vpa)
+	_, _, err := m.Deserializer.Decode(rawObject, nil, vpa)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing VPA from request: %s", err)
 	}
@@ -138,7 +138,7 @@ func (m *MinallowedRemover) getAdmissionReview(r *http.Request) (*admissionv1.Ad
 	}
 
 	admissionReview := &admissionv1.AdmissionReview{}
-	_, _, err := m.deserializer.Decode(body, nil, admissionReview)
+	_, _, err := m.Deserializer.Decode(body, nil, admissionReview)
 	if err != nil {
 		return nil, fmt.Errorf("request could not be decoded: %v", err)
 	}
