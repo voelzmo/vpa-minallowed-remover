@@ -7,6 +7,7 @@ import (
 	"github.com/gardener/vpa-minallowed-remover/pkg/logic"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"io"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,7 +30,7 @@ var (
 	cpuQuantity       = resource.MustParse("300m")
 	memQuantity       = resource.MustParse("1024G")
 	rawVpa            []byte
-	req               *http.Request
+	requestReader     *strings.Reader
 )
 
 var _ = Describe("Server", func() {
@@ -79,20 +80,16 @@ var _ = Describe("Server", func() {
 				}
 				ar.Request.Object = runtime.RawExtension{Raw: rawVpa}
 				byteAr, _ := json.Marshal(ar)
-				r := strings.NewReader(string(byteAr))
-				req = httptest.NewRequest(http.MethodGet, "/", r)
-				req.Header.Add("Content-Type", "application/json")
+				requestReader = strings.NewReader(string(byteAr))
 			})
 			It("should remove CPU minAllowed and add an Annotation", func() {
-				server := logic.NewServer()
-				resp := httptest.NewRecorder()
-				server.Serve(resp, req)
+				server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
+				resp, _ := http.Post(server.URL, "application/json", requestReader)
 
 				// response code needs to be HTTP 200
-				Expect(resp.Code).To(Equal(http.StatusOK))
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-				admissionResponse := &admissionv1.AdmissionReview{}
-				_, _, err := deserializer.Decode(resp.Body.Bytes(), nil, admissionResponse)
+				admissionResponse, err := getAdmissionReview(resp.Body)
 				if err != nil {
 					Fail(fmt.Sprintf("error parsing body into admissionResponse: %s", err))
 				}
@@ -109,7 +106,7 @@ var _ = Describe("Server", func() {
 				}
 				rawVpa, err = patch.Apply(rawVpa)
 				if err != nil {
-					Fail(fmt.Sprintf("couldn't apply the received jsonpatch: %s", err))
+					Fail(fmt.Sprintf("couldn't apply the received jsonpatch: %s. Patch was %+v", err, patch))
 				}
 				patchedVPA := &autoscalingv1.VerticalPodAutoscaler{}
 				err = json.Unmarshal(rawVpa, patchedVPA)
@@ -151,20 +148,16 @@ var _ = Describe("Server", func() {
 				}
 				ar.Request.Object = runtime.RawExtension{Raw: rawVpa}
 				byteAr, _ := json.Marshal(ar)
-				r := strings.NewReader(string(byteAr))
-				req = httptest.NewRequest(http.MethodGet, "/", r)
-				req.Header.Add("Content-Type", "application/json")
+				requestReader = strings.NewReader(string(byteAr))
 			})
 			It("should keep memory minAllowed and NOT add an Annotation", func() {
-				server := logic.NewServer()
-				resp := httptest.NewRecorder()
-				server.Serve(resp, req)
+				server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
+				resp, _ := http.Post(server.URL, "application/json", requestReader)
 
 				// response code needs to be HTTP 200
-				Expect(resp.Code).To(Equal(http.StatusOK))
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-				admissionResponse := &admissionv1.AdmissionReview{}
-				_, _, err := deserializer.Decode(resp.Body.Bytes(), nil, admissionResponse)
+				admissionResponse, err := getAdmissionReview(resp.Body)
 				if err != nil {
 					Fail(fmt.Sprintf("error parsing body into admissionResponse: %s", err))
 				}
@@ -196,29 +189,24 @@ var _ = Describe("Server", func() {
 				Expect(patchedVPA.Spec.ResourcePolicy.ContainerPolicies[1].MinAllowed.Memory().String()).To(Equal("1024G"))
 
 				// Verify Annotation is NOT added when MinAllowed was removed for a container
-				Expect(patchedVPA.Annotations["vpaMinAllowedRemover"]).To(BeEmpty())
+				_, found := patchedVPA.Annotations["vpaMinAllowedRemover"]
+				Expect(found).To(BeFalse())
 			})
 		})
 	})
 	Describe("handling incorrect requests", func() {
 		It("should return HTTP 400 when Content-Type is not set to 'application/json'", func() {
-			server := logic.NewServer()
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Add("Content-Type", "application/yaml")
-			resp := httptest.NewRecorder()
-			server.Serve(resp, req)
-			Expect(resp.Code).To(Equal(http.StatusBadRequest))
+			server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
+			resp, _ := http.Post(server.URL, "application/yaml", nil)
+			Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 		It("should return HTTP 400 when the body is empty", func() {
-			server := logic.NewServer()
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Add("Content-Type", "application/json")
-			resp := httptest.NewRecorder()
-			server.Serve(resp, req)
-			Expect(resp.Code).To(Equal(http.StatusBadRequest))
+			server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
+			resp, _ := http.Post(server.URL, "application/json", nil)
+			Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 		It("should return HTTP 400 when trying to review a different resource than VPA", func() {
-			server := logic.NewServer()
+			server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
 			ar.Request.Resource = metav1.GroupVersionResource{
 				Group:    "",
 				Version:  "v1",
@@ -226,14 +214,11 @@ var _ = Describe("Server", func() {
 			}
 			byteAr, _ := json.Marshal(ar)
 			r := strings.NewReader(string(byteAr))
-			req := httptest.NewRequest(http.MethodGet, "/", r)
-			req.Header.Add("Content-Type", "application/json")
-			resp := httptest.NewRecorder()
-			server.Serve(resp, req)
-			Expect(resp.Code).To(Equal(http.StatusBadRequest))
+			resp, _ := http.Post(server.URL, "application/json", r)
+			Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 		It("should return HTTP 400 when trying to review VPA in a different version than v1", func() {
-			server := logic.NewServer()
+			server := httptest.NewServer(logic.NewServerWithoutSSL(":8080").Handler)
 			ar.Request.Resource = metav1.GroupVersionResource{
 				Group:    "autoscaling.k8s.io",
 				Version:  "v1beta2",
@@ -241,11 +226,22 @@ var _ = Describe("Server", func() {
 			}
 			byteAr, _ := json.Marshal(ar)
 			r := strings.NewReader(string(byteAr))
-			req := httptest.NewRequest(http.MethodGet, "/", r)
-			req.Header.Add("Content-Type", "application/json")
-			resp := httptest.NewRecorder()
-			server.Serve(resp, req)
-			Expect(resp.Code).To(Equal(http.StatusBadRequest))
+			resp, _ := http.Post(server.URL, "application/json", r)
+			Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
 	})
 })
+
+func getAdmissionReview(r io.ReadCloser) (*admissionv1.AdmissionReview, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	ar := &admissionv1.AdmissionReview{}
+	_, _, err = deserializer.Decode(body, nil, ar)
+	if err != nil {
+		return nil, err
+	}
+	return ar, nil
+
+}
