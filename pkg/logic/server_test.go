@@ -3,22 +3,23 @@ package logic_test
 import (
 	"encoding/json"
 	"fmt"
-	jsonpatch "github.com/evanphx/json-patch/v5"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+
 	"github.com/gardener/vpa-minallowed-remover/pkg/logic"
+
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"io"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"strings"
-
 	autoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
-	"net/http"
-	"net/http/httptest"
 )
 
 var (

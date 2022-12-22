@@ -2,10 +2,12 @@ package main
 
 import (
 	"crypto/tls"
+	"strings"
+
 	"github.com/gardener/vpa-minallowed-remover/pkg/logic"
+
 	"github.com/kelseyhightower/envconfig"
 	"k8s.io/klog/v2"
-	"strings"
 )
 
 func main() {
