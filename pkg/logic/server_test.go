@@ -211,6 +211,10 @@ var _ = Describe("Server", func() {
 					Fail(fmt.Sprintf("error parsing body into admissionResponse: %s", err))
 				}
 
+				// GVK needs to be admission.k8s.io/v1, Kind=AdmissionReview
+				v1GVK := admissionv1.SchemeGroupVersion.WithKind("AdmissionReview")
+				Expect(admissionResponse.GroupVersionKind()).To(Equal(v1GVK))
+
 				// resource should be admitted
 				Expect(admissionResponse.Response.Allowed).To(BeTrue())
 

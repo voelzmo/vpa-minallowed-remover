@@ -65,6 +65,7 @@ func (m *MinallowedRemover) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionReviewResponse := &admissionv1.AdmissionReview{Response: admissionResponse}
+	admissionReviewResponse.SetGroupVersionKind(admissionv1.SchemeGroupVersion.WithKind("AdmissionReview"))
 
 	arBytes, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
