@@ -11,8 +11,12 @@ import (
 )
 
 func main() {
+	klog.Info("starting vpa-minallowed-remover")
 	config := &logic.Config{}
-	envconfig.Process("", config)
+	err := envconfig.Process("", config)
+	if err != nil {
+		klog.Errorf("error while processing envconfig: %s", err)
+	}
 	ensureCorrectPaths(config)
 
 	s := logic.NewServerWithoutSSL(config.ListenPort)
@@ -21,7 +25,10 @@ func main() {
 		klog.Fatalf("error while trying to create an X509 keypair from config: %s", err)
 	}
 	s.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
-
+	err = s.ListenAndServeTLS("", "")
+	if err != nil {
+		klog.Fatalf("error while starting ListenAndServe: %s", err)
+	}
 }
 
 func ensureCorrectPaths(config *logic.Config) {

@@ -47,6 +47,7 @@ func NewServerWithoutSSL(listenAddress string) *http.Server {
 }
 
 func (m *MinallowedRemover) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	klog.V(3).Infof("receiving requests: %+v", r)
 	admissionReview, err := m.getAdmissionReview(r)
 	if err != nil {
 		msg := fmt.Sprintf("error getting AdmissionReview from Request: %v", err)
@@ -73,7 +74,10 @@ func (m *MinallowedRemover) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(arBytes)
+	_, err = w.Write(arBytes)
+	if err != nil {
+		klog.Errorf("error while writing response: %s", err)
+	}
 }
 
 func (m *MinallowedRemover) GetAdmissionResponse(request *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
@@ -88,6 +92,7 @@ func (m *MinallowedRemover) GetAdmissionResponse(request *admissionv1.AdmissionR
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing VPA from request: %s", err)
 	}
+	klog.V(3).Infof("dealing with VPA %q", vpa.Name)
 
 	patches := m.GetPatches(vpa)
 
@@ -96,7 +101,9 @@ func (m *MinallowedRemover) GetAdmissionResponse(request *admissionv1.AdmissionR
 	admissionResponse.UID = request.UID
 
 	admissionResponse.PatchType = &patchTypeJSONPatch
-	marshalledPatches := []byte(fmt.Sprintf("[%s]", strings.Join(patches, ",")))
+	formattedPatches := fmt.Sprintf("[%s]", strings.Join(patches, ","))
+	marshalledPatches := []byte(formattedPatches)
+	klog.V(3).Infof("computed patches: %+v", formattedPatches)
 	admissionResponse.Patch = marshalledPatches
 
 	return admissionResponse, nil
