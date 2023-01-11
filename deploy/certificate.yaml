@@ -1,0 +1,33 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: self-signer
+  namespace: kube-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vpa-minallowed-remover-cert
+  namespace: kube-system
+  annotations:
+    cert-manager.io/allow-direct-injection: "true"
+spec:
+  commonName: vpa-minallowed-remover.kube-system.svc
+  dnsNames:
+    - vpa-minallowed-remover
+    - vpa-minallowed-remover.kube-system
+    - vpa-minallowed-remover.kube-system.svc
+  duration: 10000h0m0s
+  issuerRef:
+    name: self-signer
+  renewBefore: 9999h0m0s
+  secretName: vpa-minallowed-remover-tls-certs
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+  privateKey:
+    algorithm: "RSA"
+    size: 2048

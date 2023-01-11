@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: vpa-minallowed-remover
+  namespace: kube-system
+  annotations:
+    cert-manager.io/inject-ca-from: kube-system/vpa-minallowed-remover-cert
+webhooks:
+  - name: vpa-minallowed-remover.gardener.cloud
+    matchPolicy: Equivalent
+    timeoutSeconds: 10
+    failurePolicy: Ignore
+    clientConfig:
+      service:
+        namespace: kube-system
+        name: vpa-minallowed-remover
+        path: /
+        port: 443
+    rules:
+      - apiGroups: ["autoscaling.k8s.io"]
+        apiVersions: ["v1"]
+        resources: ["verticalpodautoscalers"]
+        operations: ["CREATE", "UPDATE"]
+        scope: "Namespaced"
+    sideEffects: None
+    admissionReviewVersions: ["v1"]

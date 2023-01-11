@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vpa-minallowed-remover
+  name: vpa-minallowed-remover
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vpa-minallowed-remover
+  template:
+    metadata:
+      labels:
+        app: vpa-minallowed-remover
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+      - image: voelzmo/vpa-minallowed-remover
+        args: ["-v=3"]
+        name: vpa-minallowed-remover
+        volumeMounts:
+          - name: webhook-certs
+            mountPath: /etc/vpa-minallowed-remover-tls/
+            readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: vpa-minallowed-remover-tls-certs
+            optional: false
